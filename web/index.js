@@ -89,14 +89,11 @@ app.get(
   shopify.redirectToShopifyOrAppRoot()
 );
 
-app.post(
-  shopify.config.webhooks.path,
-  shopify.processWebhooks({ webhookHandlers: GDPRWebhookHandlers })
-);
 
 // Middleware to validate payload using HMAC
 function validatePayload(req, res, next) {
   const sigHeaderName = "X-Signature-SHA256";
+  const secret = "eacbafb4858faaf809ffb9c8472e2972"; // Add your secret key here
 
   if (req.get(sigHeaderName)) {
     const sig = Buffer.from(req.get(sigHeaderName) || "", "utf8");
@@ -116,13 +113,15 @@ function validatePayload(req, res, next) {
   return next();
 }
 
-
+app.post(
+  shopify.config.webhooks.path,
+  validatePayload,
+  shopify.processWebhooks({ webhookHandlers: GDPRWebhookHandlers })
+);
 
 // All endpoints after this point will require an active session
 app.use("/api/*", shopify.validateAuthenticatedSession());
-
 app.use(express.json());
-app.use(validatePayload);
 
 // Working Properly monthly plans 
 app.post("/api/recurring_application_charge", async (req, res) => {
