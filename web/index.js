@@ -25,40 +25,6 @@ const STATIC_PATH =
 const app = express();
 app.use(cookieParser());
 
-const secret = "eacbafb4858faaf809ffb9c8472e2972";
-
-function validatePayload(req, res, next) {
-  const sigHeaderName = "X-Signature-SHA256";
-  const sigHashAlg = "sha256";
-  const sigPrefix = ""; // set this to your signature prefix if any
-
-  if (req.get(sigHeaderName)) {
-    // Extract Signature header
-    const sig = Buffer.from(req.get(sigHeaderName) || "", "utf8");
-
-    // Calculate HMAC
-    const hmac = crypto.createHmac(sigHashAlg, secret);
-    const digest = Buffer.from(
-      sigPrefix + hmac.update(req.rawBody).digest("hex"),
-      "utf8"
-    );
-
-    // Compare HMACs
-    if (
-      sig.length !== digest.length ||
-      !crypto.timingSafeEqual(digest, sig)
-    ) {
-      return res.status(401).send({
-        message: `Request body digest (${digest}) did not match ${sigHeaderName} (${sig})`,
-      });
-    }
-  }
-
-  return next();
-}
-
-app.use(validatePayload);
-
 
 // Set up Shopify authentication and webhook handling
 app.get(shopify.config.auth.path, shopify.auth.begin());
@@ -128,10 +94,35 @@ app.post(
   shopify.processWebhooks({ webhookHandlers: GDPRWebhookHandlers })
 );
 
+// Middleware to validate payload using HMAC
+function validatePayload(req, res, next) {
+  const sigHeaderName = "X-Signature-SHA256";
+
+  if (req.get(sigHeaderName)) {
+    const sig = Buffer.from(req.get(sigHeaderName) || "", "utf8");
+    const hmac = crypto.createHmac("sha256", secret);
+    const digest = Buffer.from(
+      hmac.update(JSON.stringify(req.body)).digest("hex"),
+      "utf8"
+    );
+
+    if (!crypto.timingSafeEqual(digest, sig)) {
+      return res.status(401).send({
+        message: `Request body digest did not match ${sigHeaderName}`,
+      });
+    }
+  }
+
+  return next();
+}
+
+
+
 // All endpoints after this point will require an active session
 app.use("/api/*", shopify.validateAuthenticatedSession());
 
 app.use(express.json());
+app.use(validatePayload);
 
 // Working Properly monthly plans 
 app.post("/api/recurring_application_charge", async (req, res) => {
