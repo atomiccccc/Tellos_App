@@ -12,8 +12,7 @@ import cookieParser from 'cookie-parser';
 import http from 'http';
 import addUninstallWebhookHandler from "./webhooks/app-uninstall.js";
 import 'dotenv/config';
-import crypto from "crypto";
-
+import crypto from 'crypto';
 
 const PORT = parseInt(process.env.BACKEND_PORT || process.env.PORT, 10);
 
@@ -23,10 +22,32 @@ const STATIC_PATH =
     : `${process.cwd()}/frontend/`;
 
 const app = express();
+
+// ==================================================================================
+// Middleware to verify all webhooks call from Shopify
+async function verifyShopifyWebhooks(req, res, next) {
+  const hmac = req.query.hmac;
+
+  if (!hmac) {
+    return res.status(401).send("Webhook must originate from Shopify!");
+  }
+
+  const genHash = crypto
+    .createHmac("sha256", "eacbafb4858faaf809ffb9c8472e2972")
+    .update(JSON.stringify(req.body))
+    .digest("base64");
+
+  if (genHash !== hmac) {
+    return res.status(401).send("Couldn't verify incoming Webhook request!");
+  }
+
+  next();
+}
+app.use(verifyShopifyWebhooks);
+
+// ===================================================================================
+
 app.use(cookieParser());
-
-
-// Set up Shopify authentication and webhook handling
 app.get(shopify.config.auth.path, shopify.auth.begin());
 
 app.get(
@@ -89,38 +110,14 @@ app.get(
   shopify.redirectToShopifyOrAppRoot()
 );
 
-
-// Middleware to validate payload using HMAC
-function validatePayload(req, res, next) {
-  const sigHeaderName = "X-Signature-SHA256";
-  const secret = "eacbafb4858faaf809ffb9c8472e2972"; // Add your secret key here
-
-  if (req.get(sigHeaderName)) {
-    const sig = Buffer.from(req.get(sigHeaderName) || "", "utf8");
-    const hmac = crypto.createHmac("sha256", secret);
-    const digest = Buffer.from(
-      hmac.update(JSON.stringify(req.body)).digest("hex"),
-      "utf8"
-    );
-
-    if (!crypto.timingSafeEqual(digest, sig)) {
-      return res.status(401).send({
-        message: `Request body digest did not match ${sigHeaderName}`,
-      });
-    }
-  }
-
-  return next();
-}
-
 app.post(
   shopify.config.webhooks.path,
-  validatePayload,
   shopify.processWebhooks({ webhookHandlers: GDPRWebhookHandlers })
 );
 
 // All endpoints after this point will require an active session
 app.use("/api/*", shopify.validateAuthenticatedSession());
+
 app.use(express.json());
 
 // Working Properly monthly plans 
