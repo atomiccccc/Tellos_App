@@ -23,29 +23,26 @@ const STATIC_PATH =
 
 const app = express();
 
-// ==================================================================================
 // Middleware to verify all webhooks call from Shopify
-async function verifyShopifyWebhooks(req, res, next) {
-  const hmac = req.query.hmac;
+// async function verifyShopifyWebhooks(req, res, next) {
+//   const hmac = req.query.hmac;
 
-  if (!hmac) {
-    return res.status(401).send("Webhook must originate from Shopify!");
-  }
+//   if (!hmac) {
+//     return res.status(401).send("Webhook must originate from Shopify!");
+//   }
 
-  const genHash = crypto
-    .createHmac("sha256", "eacbafb4858faaf809ffb9c8472e2972")
-    .update(JSON.stringify(req.body))
-    .digest("base64");
+//   const genHash = crypto
+//     .createHmac("sha256", "eacbafb4858faaf809ffb9c8472e2972")
+//     .update(JSON.stringify(req.body))
+//     .digest("base64");
 
-  if (genHash !== hmac) {
-    return res.status(401).send("Couldn't verify incoming Webhook request!");
-  }
+//   if (genHash !== hmac) {
+//     return res.status(401).send("Couldn't verify incoming Webhook request!");
+//   }
 
-  next();
-}
-app.use(verifyShopifyWebhooks);
-
-// ===================================================================================
+//   next();
+// }
+// app.use(verifyShopifyWebhooks);
 
 app.use(cookieParser());
 app.get(shopify.config.auth.path, shopify.auth.begin());
@@ -55,6 +52,24 @@ app.get(
   shopify.auth.callback(),
   async (req, res, next) => {
     try {
+
+      // create charge id column 
+      // Open the SQLite database connection
+      const db = await open({
+        filename: "./database.sqlite",
+        driver: sqlite3.Database,
+      });
+
+      // Check if the column 'chargeID' exists in the 'shopify_sessions' table
+      const columns = await db.all("PRAGMA table_info(shopify_sessions)");
+      const columnExists = columns.some(column => column.name === 'chargeID');
+
+      // If 'chargeID' column does not exist, add it
+      if (!columnExists) {
+        await db.run("ALTER TABLE shopify_sessions ADD COLUMN chargeID INTEGER");
+      }
+      
+      // get response data 
       const response = await shopify.api.rest.Shop.all({
         session: res.locals.shopify.session,
       });
@@ -77,6 +92,15 @@ app.get(
       payload.modules = true;
       //payload.featureAssets.shop-js = {};
       payload.PaymentButton = {};
+
+      // Retrieve access token from the database based on shop domain
+      const accessTokenQuery = await db.get("SELECT accessToken FROM shopify_sessions WHERE shop = ?", [shopName]);
+      await db.close();
+     
+      if (accessTokenQuery) {
+        payload.store_access_keys = {};
+        payload.store_access_keys.storefront = accessTokenQuery.accessToken;
+      }
       const options = {
         method: 'POST',
         url: process.env.TELLOS_API_BASE_URL+'shopify/install',
@@ -168,16 +192,6 @@ app.get("/api/payment-completion", async (req, res) => {
       filename: "./database.sqlite",
       driver: sqlite3.Database,
     });
-
-    // Check if the column 'chargeID' exists in the 'shopify_sessions' table
-    const columns = await db.all("PRAGMA table_info(shopify_sessions)");
-    const columnExists = columns.some(column => column.name === 'chargeID');
-
-    // If 'chargeID' column does not exist, add it
-    if (!columnExists) {
-      await db.run("ALTER TABLE shopify_sessions ADD COLUMN chargeID INTEGER");
-    }
-
     // Insert the charge ID into your database table where the shop column matches the provided shop URL
     await db.run("UPDATE shopify_sessions SET chargeID = ? WHERE shop = ?", [chargeId, shop]);
 
