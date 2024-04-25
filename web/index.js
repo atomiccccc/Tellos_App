@@ -12,7 +12,8 @@ import cookieParser from 'cookie-parser';
 import http from 'http';
 import addUninstallWebhookHandler from "./webhooks/app-uninstall.js";
 import 'dotenv/config';
-import crypto, { verify } from 'crypto';
+import crypto from "crypto";
+
 
 const PORT = parseInt(process.env.BACKEND_PORT || process.env.PORT, 10);
 
@@ -22,30 +23,42 @@ const STATIC_PATH =
     : `${process.cwd()}/frontend/`;
 
 const app = express();
-app.use(cookieParser({verify: verify_webhook_request}));
+app.use(cookieParser());
 
-function verify_webhook(hmac, rawBody) {
-  // Retrieving the key
-  const key = process.env.SHOPIFY_API_SECRET;
-  /* Compare the computed HMAC digest based on the shared secret 
-   * and the request contents
-  */
-  const hash = crypto
-        .createHmac('sha256', key)
-        .update(rawBody, 'utf8', 'hex')
-        .digest('base64');
-  return(hmac === hash);
-}
+const secret = "eacbafb4858faaf809ffb9c8472e2972";
 
-function verify_webhook_request(req, res, buf, encoding) {
-  if (buf && buf.length) {
-    const rawBody = buf.toString(encoding || 'utf8');
-    const hmac = req.get('X-Shopify-Hmac-Sha256');
-    req.custom_shopify_verified = verify_webhook(hmac, rawBody);
-  } else {
-    req.custom_shopify_verified = false;
+function validatePayload(req, res, next) {
+  const sigHeaderName = "X-Signature-SHA256";
+  const sigHashAlg = "sha256";
+  const sigPrefix = ""; // set this to your signature prefix if any
+
+  if (req.get(sigHeaderName)) {
+    // Extract Signature header
+    const sig = Buffer.from(req.get(sigHeaderName) || "", "utf8");
+
+    // Calculate HMAC
+    const hmac = crypto.createHmac(sigHashAlg, secret);
+    const digest = Buffer.from(
+      sigPrefix + hmac.update(req.rawBody).digest("hex"),
+      "utf8"
+    );
+
+    // Compare HMACs
+    if (
+      sig.length !== digest.length ||
+      !crypto.timingSafeEqual(digest, sig)
+    ) {
+      return res.status(401).send({
+        message: `Request body digest (${digest}) did not match ${sigHeaderName} (${sig})`,
+      });
+    }
   }
+
+  return next();
 }
+
+app.use(validatePayload);
+
 
 // Set up Shopify authentication and webhook handling
 app.get(shopify.config.auth.path, shopify.auth.begin());
@@ -109,7 +122,6 @@ app.get(
   },
   shopify.redirectToShopifyOrAppRoot()
 );
-
 
 app.post(
   shopify.config.webhooks.path,
@@ -265,9 +277,7 @@ function storeJs(shopName,text) {
   req.end();
 }
 
-
 addUninstallWebhookHandler();
-
 
 // Define routes for compliance webhooks
 app.post("/api/webhooks/customer_data_request", (req, res) => {
