@@ -12,7 +12,8 @@ import cookieParser from 'cookie-parser';
 import http from 'http';
 import addUninstallWebhookHandler from "./webhooks/app-uninstall.js";
 import 'dotenv/config';
-import crypto from 'crypto';
+import { createRawBody } from "shopify-hmac-validation";
+import { checkWebhookHmacValidity } from "shopify-hmac-validation";
 
 const PORT = parseInt(process.env.BACKEND_PORT || process.env.PORT, 10);
 
@@ -24,19 +25,19 @@ const STATIC_PATH =
 const app = express();
 app.use(cookieParser());
 
+// Middleware to create raw request body for webhook HMAC validation
+app.use(express.raw({ type: 'application/json' }));
 
 // Middleware to verify webhook HMAC signature
 function verifyWebhook(req, res, next) {
   const hmacHeader = req.get('X-Shopify-Hmac-SHA256'); // Get HMAC header from request
-  const requestBody = JSON.stringify(req.body); // Get request body
-  const hmac = crypto.createHmac('sha256', process.env.SHOPIFY_API_SECRET); // Create HMAC object with your Shopify app's secret
-  const calculatedHmac = hmac.update(requestBody).digest('base64'); // Calculate HMAC digest
+  const rawBody = createRawBody(req.body); // Create raw request body
+  const isValid = checkWebhookHmacValidity(process.env.SHOPIFY_API_SECRET, rawBody, hmacHeader); // Verify HMAC signature
 
-  // Compare calculated HMAC with the one provided in the header
-  if (calculatedHmac === hmacHeader) {
-    next(); // If HMACs match, proceed to the next middleware
+  if (isValid) {
+    next(); // If HMAC is valid, proceed to next middleware
   } else {
-    res.status(401).send('Unauthorized'); // If HMACs don't match, send 401 Unauthorized status
+    res.status(401).send('Unauthorized'); // If HMAC is not valid, send 401 Unauthorized status
   }
 }
 
