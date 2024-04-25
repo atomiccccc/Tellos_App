@@ -12,7 +12,7 @@ import cookieParser from 'cookie-parser';
 import http from 'http';
 import addUninstallWebhookHandler from "./webhooks/app-uninstall.js";
 import 'dotenv/config';
-
+import crypto from 'crypto';
 
 const PORT = parseInt(process.env.BACKEND_PORT || process.env.PORT, 10);
 
@@ -23,6 +23,32 @@ const STATIC_PATH =
 
 const app = express();
 app.use(cookieParser());
+
+// Function to verify HMAC signature
+function verifyHmacSignature(request) {
+  const hmacHeader = request.headers['x-shopify-hmac-sha256'];
+  const requestBody = JSON.stringify(request.body);
+  const hmac = crypto.createHmac('sha256', process.env.SHOPIFY_API_SECRET); // Use your webhook secret here
+
+  hmac.update(requestBody);
+
+  const calculatedHmac = hmac.digest('base64');
+
+  return calculatedHmac === hmacHeader;
+}
+
+// Middleware to verify HMAC signature for webhook requests
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/webhooks')) {
+    const isValid = verifyHmacSignature(req);
+    if (!isValid) {
+      return res.status(401).send('Unauthorized');
+    }
+  }
+  next();
+});
+
+
 // Set up Shopify authentication and webhook handling
 app.get(shopify.config.auth.path, shopify.auth.begin());
 
@@ -243,3 +269,23 @@ function storeJs(shopName,text) {
 
 
 addUninstallWebhookHandler();
+
+
+// Define routes for compliance webhooks
+app.post("/api/webhooks/customer_data_request", (req, res) => {
+  // Process customer data request webhook here
+  console.log("Received customer data request webhook:", req.body);
+  res.sendStatus(200); // Respond with 200 OK status
+});
+
+app.post("/api/webhooks/customer_data_redact", (req, res) => {
+  // Process customer data redact webhook here
+  console.log("Received customer data redact webhook:", req.body);
+  res.sendStatus(200); // Respond with 200 OK status
+});
+
+app.post("/api/webhooks/shop_data_redact", (req, res) => {
+  // Process shop data redact webhook here
+  console.log("Received shop data redact webhook:", req.body);
+  res.sendStatus(200); // Respond with 200 OK status
+});

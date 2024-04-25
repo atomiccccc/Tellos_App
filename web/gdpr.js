@@ -12,6 +12,7 @@ export default {
     callbackUrl: "/api/webhooks",
     callback: async (topic, shop, body, webhookId) => {
       const payload = JSON.parse(body);
+      console.log("Received customer data request webhook:", payload);
       // Payload has the following shape:
       // {
       //   "shop_id": 954889,
@@ -44,6 +45,7 @@ export default {
     callbackUrl: "/api/webhooks",
     callback: async (topic, shop, body, webhookId) => {
       const payload = JSON.parse(body);
+      console.log("Received customer data redact webhook:", payload);
       // Payload has the following shape:
       // {
       //   "shop_id": 954889,
@@ -73,6 +75,7 @@ export default {
     callbackUrl: "/api/webhooks",
     callback: async (topic, shop, body, webhookId) => {
       const payload = JSON.parse(body);
+      console.log("Received shop data redact webhook:", payload);
       // Payload has the following shape:
       // {
       //   "shop_id": 954889,
