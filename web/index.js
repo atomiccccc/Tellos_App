@@ -12,8 +12,7 @@ import cookieParser from 'cookie-parser';
 import http from 'http';
 import addUninstallWebhookHandler from "./webhooks/app-uninstall.js";
 import 'dotenv/config';
-import { createRawBody } from "shopify-hmac-validation";
-import { checkWebhookHmacValidity } from "shopify-hmac-validation";
+import crypto, { verify } from 'crypto';
 
 const PORT = parseInt(process.env.BACKEND_PORT || process.env.PORT, 10);
 
@@ -23,24 +22,30 @@ const STATIC_PATH =
     : `${process.cwd()}/frontend/`;
 
 const app = express();
-app.use(cookieParser());
+app.use(cookieParser({verify: verify_webhook_request}));
 
-// Middleware to create raw request body for webhook HMAC validation
-app.use(express.raw({ type: 'application/json' }));
-
-// Middleware to verify webhook HMAC signature
-function verifyWebhook(req, res, next) {
-  const hmacHeader = req.get('X-Shopify-Hmac-SHA256'); // Get HMAC header from request
-  const rawBody = createRawBody(req.body); // Create raw request body
-  const isValid = checkWebhookHmacValidity(process.env.SHOPIFY_API_SECRET, rawBody, hmacHeader); // Verify HMAC signature
-
-  if (isValid) {
-    next(); // If HMAC is valid, proceed to next middleware
-  } else {
-    res.status(401).send('Unauthorized'); // If HMAC is not valid, send 401 Unauthorized status
-  }
+function verify_webhook(hmac, rawBody) {
+  // Retrieving the key
+  const key = process.env.SHOPIFY_API_SECRET;
+  /* Compare the computed HMAC digest based on the shared secret 
+   * and the request contents
+  */
+  const hash = crypto
+        .createHmac('sha256', key)
+        .update(rawBody, 'utf8', 'hex')
+        .digest('base64');
+  return(hmac === hash);
 }
 
+function verify_webhook_request(req, res, buf, encoding) {
+  if (buf && buf.length) {
+    const rawBody = buf.toString(encoding || 'utf8');
+    const hmac = req.get('X-Shopify-Hmac-Sha256');
+    req.custom_shopify_verified = verify_webhook(hmac, rawBody);
+  } else {
+    req.custom_shopify_verified = false;
+  }
+}
 
 // Set up Shopify authentication and webhook handling
 app.get(shopify.config.auth.path, shopify.auth.begin());
@@ -108,7 +113,6 @@ app.get(
 
 app.post(
   shopify.config.webhooks.path,
-  verifyWebhook,
   shopify.processWebhooks({ webhookHandlers: GDPRWebhookHandlers })
 );
 
