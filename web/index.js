@@ -22,29 +22,33 @@ const STATIC_PATH =
     : `${process.cwd()}/frontend/`;
 
 const app = express();
+app.use(cookieParser());
 
 // Middleware to verify all webhooks call from Shopify
 async function verifyShopifyWebhooks(req, res, next) {
-  const hmac = req.query.hmac;
 
-  if (!hmac) {
-    return res.status(401).send("Webhook must originate from Shopify!");
-  }
+  if(req.body != undefined){
+    const hmac = req.query.hmac;
 
-  const genHash = crypto
-    .createHmac("sha256", process.env.SHOPIFY_API_SECRET)
-    .update(JSON.stringify(req.body))
-    .digest("base64");
+    if (!hmac) {
+      return res.status(401).send("Webhook must originate from Shopify!");
+    }
+    console.log(req.body);
+    const genHash = crypto
+      .createHmac("sha256", process.env.SHOPIFY_API_SECRET)
+      .update(JSON.stringify(req.body))
+      .digest("base64");
 
-  if (genHash !== hmac) {
-    return res.status(401).send("Couldn't verify incoming Webhook request!");
+    if (genHash !== hmac) {
+      return res.status(401).send("Couldn't verify incoming Webhook request!");
+    }
   }
 
   next();
+  
 }
 app.use(verifyShopifyWebhooks);
 
-app.use(cookieParser());
 app.get(shopify.config.auth.path, shopify.auth.begin());
 
 app.get(
