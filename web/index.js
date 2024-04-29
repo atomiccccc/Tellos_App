@@ -24,25 +24,25 @@ const STATIC_PATH =
 const app = express();
 
 // Middleware to verify all webhooks call from Shopify
-// async function verifyShopifyWebhooks(req, res, next) {
-//   const hmac = req.query.hmac;
+async function verifyShopifyWebhooks(req, res, next) {
+  const hmac = req.query.hmac;
 
-//   if (!hmac) {
-//     return res.status(401).send("Webhook must originate from Shopify!");
-//   }
+  if (!hmac) {
+    return res.status(401).send("Webhook must originate from Shopify!");
+  }
 
-//   const genHash = crypto
-//     .createHmac("sha256", "eacbafb4858faaf809ffb9c8472e2972")
-//     .update(JSON.stringify(req.body))
-//     .digest("base64");
+  const genHash = crypto
+    .createHmac("sha256", process.env.SHOPIFY_API_SECRET)
+    .update(JSON.stringify(req.body))
+    .digest("base64");
 
-//   if (genHash !== hmac) {
-//     return res.status(401).send("Couldn't verify incoming Webhook request!");
-//   }
+  if (genHash !== hmac) {
+    return res.status(401).send("Couldn't verify incoming Webhook request!");
+  }
 
-//   next();
-// }
-// app.use(verifyShopifyWebhooks);
+  next();
+}
+app.use(verifyShopifyWebhooks);
 
 app.use(cookieParser());
 app.get(shopify.config.auth.path, shopify.auth.begin());
@@ -283,18 +283,15 @@ addUninstallWebhookHandler();
 // Define routes for compliance webhooks
 app.post("/api/webhooks/customer_data_request", (req, res) => {
   // Process customer data request webhook here
-  console.log("Received customer data request webhook:", req.body);
   res.sendStatus(200); // Respond with 200 OK status
 });
 
 app.post("/api/webhooks/customer_data_redact", (req, res) => {
   // Process customer data redact webhook here
-  console.log("Received customer data redact webhook:", req.body);
   res.sendStatus(200); // Respond with 200 OK status
 });
 
 app.post("/api/webhooks/shop_data_redact", (req, res) => {
   // Process shop data redact webhook here
-  console.log("Received shop data redact webhook:", req.body);
   res.sendStatus(200); // Respond with 200 OK status
 });
