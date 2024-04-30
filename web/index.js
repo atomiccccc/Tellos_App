@@ -27,27 +27,24 @@ app.use(cookieParser());
 // Middleware to verify all webhooks call from Shopify
 async function verifyShopifyWebhooks(req, res, next) {
 
-  if(req.body != undefined){
-    const hmac = req.query.hmac;
+  const hmac = req.query.hmac;
 
-    if (!hmac) {
-      return res.status(401).send("Webhook must originate from Shopify!");
-    }
-    console.log(req.body);
-    const genHash = crypto
-      .createHmac("sha256", process.env.SHOPIFY_API_SECRET)
-      .update(JSON.stringify(req.body))
-      .digest("base64");
+  if (!hmac) {
+    return res.status(401).send("Webhook must originate from Shopify!");
+  }
+  console.log(req.query);
+  const genHash = crypto
+    .createHmac("sha256", process.env.SHOPIFY_API_SECRET)
+    .update(JSON.stringify(req.body))
+    .digest("base64");
 
-    if (genHash !== hmac) {
-      return res.status(401).send("Couldn't verify incoming Webhook request!");
-    }
+  if (genHash !== hmac) {
+    return res.status(401).send("Couldn't verify incoming Webhook request!");
   }
 
-  next();
-  
+next();
+
 }
-app.use(verifyShopifyWebhooks);
 
 app.get(shopify.config.auth.path, shopify.auth.begin());
 
@@ -140,6 +137,7 @@ app.get(
 
 app.post(
   shopify.config.webhooks.path,
+  verifyShopifyWebhooks,
   shopify.processWebhooks({ webhookHandlers: GDPRWebhookHandlers })
 );
 
@@ -285,17 +283,17 @@ function storeJs(shopName,text) {
 addUninstallWebhookHandler();
 
 // Define routes for compliance webhooks
-app.post("/api/webhooks/customer_data_request", (req, res) => {
+app.post("/api/webhooks/customer_data_request",verifyShopifyWebhooks, (req, res) => {
   // Process customer data request webhook here
   res.sendStatus(200); // Respond with 200 OK status
 });
 
-app.post("/api/webhooks/customer_data_redact", (req, res) => {
+app.post("/api/webhooks/customer_data_redact",verifyShopifyWebhooks, (req, res) => {
   // Process customer data redact webhook here
   res.sendStatus(200); // Respond with 200 OK status
 });
 
-app.post("/api/webhooks/shop_data_redact", (req, res) => {
+app.post("/api/webhooks/shop_data_redact",verifyShopifyWebhooks, (req, res) => {
   // Process shop data redact webhook here
   res.sendStatus(200); // Respond with 200 OK status
 });
