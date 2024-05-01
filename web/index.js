@@ -5,14 +5,14 @@ import express from "express";
 import serveStatic from "serve-static";
 import fetch from 'node-fetch';
 import shopify from "./shopify.js";
-import GDPRWebhookHandlers from "./gdpr.js";
 import sqlite3 from "sqlite3";
 import { open } from "sqlite";
 import cookieParser from 'cookie-parser';
+import GDPRWebhookHandlers from "./gdpr.js";
 import http from 'http';
-import addUninstallWebhookHandler from "./webhooks/app-uninstall.js";
 import 'dotenv/config';
 import crypto from 'crypto';
+import { DeliveryMethod } from "@shopify/shopify-api";
 
 const PORT = parseInt(process.env.BACKEND_PORT || process.env.PORT, 10);
 
@@ -137,8 +137,7 @@ app.get(
 
 app.post(
   shopify.config.webhooks.path,
-  verifyShopifyWebhooks,
-  shopify.processWebhooks({ webhookHandlers: GDPRWebhookHandlers })
+  shopify.processWebhooks({ webhookHandlers:GDPRWebhookHandlers})
 );
 
 // All endpoints after this point will require an active session
@@ -279,21 +278,3 @@ function storeJs(shopName,text) {
   req.write(JSON.stringify(postData));
   req.end();
 }
-
-addUninstallWebhookHandler();
-
-// Define routes for compliance webhooks
-app.post("/api/webhooks/customer_data_request",verifyShopifyWebhooks, (req, res) => {
-  // Process customer data request webhook here
-  res.sendStatus(200); // Respond with 200 OK status
-});
-
-app.post("/api/webhooks/customer_data_redact",verifyShopifyWebhooks, (req, res) => {
-  // Process customer data redact webhook here
-  res.sendStatus(200); // Respond with 200 OK status
-});
-
-app.post("/api/webhooks/shop_data_redact",verifyShopifyWebhooks, (req, res) => {
-  // Process shop data redact webhook here
-  res.sendStatus(200); // Respond with 200 OK status
-});
