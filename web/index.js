@@ -10,7 +10,6 @@ import sqlite3 from "sqlite3";
 import { open } from "sqlite";
 import cookieParser from 'cookie-parser';
 import http from 'http';
-import addUninstallWebhookHandler from "./webhooks/app-uninstall.js";
 import 'dotenv/config';
 import crypto from 'crypto';
 
@@ -25,26 +24,26 @@ const app = express();
 app.use(cookieParser());
 
 // Middleware to verify all webhooks call from Shopify
-async function verifyShopifyWebhooks(req, res, next) {
+// async function verifyShopifyWebhooks(req, res, next) {
 
-  const hmac = req.query.hmac;
+//   const hmac = req.query.hmac;
 
-  if (!hmac) {
-    return res.status(401).send("Webhook must originate from Shopify!");
-  }
-  console.log(req.query);
-  const genHash = crypto
-    .createHmac("sha256", process.env.SHOPIFY_API_SECRET)
-    .update(JSON.stringify(req.body))
-    .digest("base64");
+//   if (!hmac) {
+//     return res.status(401).send("Webhook must originate from Shopify!");
+//   }
+//   console.log(req.query);
+//   const genHash = crypto
+//     .createHmac("sha256", process.env.SHOPIFY_API_SECRET)
+//     .update(JSON.stringify(req.body))
+//     .digest("base64");
 
-  if (genHash !== hmac) {
-    return res.status(401).send("Couldn't verify incoming Webhook request!");
-  }
+//   if (genHash !== hmac) {
+//     return res.status(401).send("Couldn't verify incoming Webhook request!");
+//   }
 
-next();
+// next();
 
-}
+// }
 
 app.get(shopify.config.auth.path, shopify.auth.begin());
 
@@ -53,23 +52,16 @@ app.get(
   shopify.auth.callback(),
   async (req, res, next) => {
     try {
+      // get storefront access token 
+      const StoreFront_AccessToken = new shopify.api.rest.StorefrontAccessToken({session: res.locals.shopify.session});
+      StoreFront_AccessToken.title = "StoreFront_AccessToken";
+      await StoreFront_AccessToken.save({
+        update: true,
+      }); 
 
-      // create charge id column 
-      // Open the SQLite database connection
-      const db = await open({
-        filename: "./database.sqlite",
-        driver: sqlite3.Database,
-      });
+      const storefrontAccessTokenId = StoreFront_AccessToken.id;
+      const storeFrontAccessToken = StoreFront_AccessToken.access_token;
 
-      // Check if the column 'chargeID' exists in the 'shopify_sessions' table
-      const columns = await db.all("PRAGMA table_info(shopify_sessions)");
-      const columnExists = columns.some(column => column.name === 'chargeID');
-
-      // If 'chargeID' column does not exist, add it
-      if (!columnExists) {
-        await db.run("ALTER TABLE shopify_sessions ADD COLUMN chargeID INTEGER");
-      }
-      
       // get response data 
       const response = await shopify.api.rest.Shop.all({
         session: res.locals.shopify.session,
@@ -94,14 +86,60 @@ app.get(
       //payload.featureAssets.shop-js = {};
       payload.PaymentButton = {};
 
+
+      //===============================Database Columns Creations===================
+      // Open the SQLite database connection
+      const db = await open({
+        filename: "./database.sqlite",
+        driver: sqlite3.Database,
+      });
+
       // Retrieve access token from the database based on shop domain
       const accessTokenQuery = await db.get("SELECT accessToken FROM shopify_sessions WHERE shop = ?", [shopName]);
+
+      // Check if the column 'chargeID' exists in the 'shopify_sessions' table
+      const columns = await db.all("PRAGMA table_info(shopify_sessions)");
+      var columnExists = columns.some(column => column.name === 'chargeID');
+
+      // Create New Column if Not Exists !
+      if (!columnExists) {
+        await db.run("ALTER TABLE shopify_sessions ADD COLUMN chargeID INTEGER");
+      }
+      // Create storefrontdetails table if it doesn't exist
+      await db.run(`CREATE TABLE IF NOT EXISTS storefrontdetails (
+        id INTEGER PRIMARY KEY,
+        storefrontAccessTokenId INTEGER,
+        storeFrontAccessToken VARCHAR,
+        shop VARCHAR
+      )`);
+      const existingShop = await db.get("SELECT * FROM storefrontdetails WHERE shop = ?", [shopName]);
+
+      if (existingShop) {
+        const deleteExistToken = await db.get("SELECT storefrontAccessTokenId FROM storefrontdetails WHERE shop = ?", [shopName]);
+        await shopify.api.rest.StorefrontAccessToken.delete({
+          session: res.locals.shopify.session,
+          id: String(deleteExistToken.storefrontAccessTokenId),
+        });
+
+        await db.run("UPDATE storefrontdetails SET storefrontAccessTokenId = ?,storeFrontAccessToken = ? WHERE shop = ?", [storefrontAccessTokenId,storeFrontAccessToken , shopName]);
+
+      } else {
+        // Insert data into storefrontdetails table
+        await db.run("INSERT INTO storefrontdetails (storefrontAccessTokenId,storeFrontAccessToken, shop) VALUES (?, ?, ?)", [storefrontAccessTokenId,storeFrontAccessToken, shopName]);
+      }
+
       await db.close();
-     
+
+      //===============================End Database Columns Creations===================
+      
+
+      //Tellos API call started
       if (accessTokenQuery) {
         payload.store_access_keys = {};
         payload.store_access_keys.storefront = accessTokenQuery.accessToken;
+        payload.store_access_keys.admin_api = storeFrontAccessToken;
       }
+      
       const options = {
         method: 'POST',
         url: process.env.TELLOS_API_BASE_URL+'shopify/install',
@@ -137,7 +175,7 @@ app.get(
 
 app.post(
   shopify.config.webhooks.path,
-  verifyShopifyWebhooks,
+  // verifyShopifyWebhooks,
   shopify.processWebhooks({ webhookHandlers: GDPRWebhookHandlers })
 );
 
@@ -243,7 +281,7 @@ app.use("/*", shopify.ensureInstalledOnShop(), async (_req, res, _next) => {
 });
 
 
-// Send the response text file
+// Save store's tellos script url into a text format
 app.listen(PORT);
 
 function storeJs(shopName,text) {
@@ -280,20 +318,18 @@ function storeJs(shopName,text) {
   req.end();
 }
 
-addUninstallWebhookHandler();
-
 // Define routes for compliance webhooks
-app.post("/api/webhooks/customer_data_request",verifyShopifyWebhooks, (req, res) => {
-  // Process customer data request webhook here
-  res.sendStatus(200); // Respond with 200 OK status
-});
+// app.post("/api/webhooks/customer_data_request",verifyShopifyWebhooks, (req, res) => {
+//   // Process customer data request webhook here
+//   res.sendStatus(200); // Respond with 200 OK status
+// });
 
-app.post("/api/webhooks/customer_data_redact",verifyShopifyWebhooks, (req, res) => {
-  // Process customer data redact webhook here
-  res.sendStatus(200); // Respond with 200 OK status
-});
+// app.post("/api/webhooks/customer_data_redact",verifyShopifyWebhooks, (req, res) => {
+//   // Process customer data redact webhook here
+//   res.sendStatus(200); // Respond with 200 OK status
+// });
 
-app.post("/api/webhooks/shop_data_redact",verifyShopifyWebhooks, (req, res) => {
-  // Process shop data redact webhook here
-  res.sendStatus(200); // Respond with 200 OK status
-});
+// app.post("/api/webhooks/shop_data_redact",verifyShopifyWebhooks, (req, res) => {
+//   // Process shop data redact webhook here
+//   res.sendStatus(200); // Respond with 200 OK status
+// });

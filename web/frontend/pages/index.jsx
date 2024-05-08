@@ -110,7 +110,7 @@ export default function PricingPage() {
               <div className="chart-cont2">
                 <div className="chart-btn">
                   <button onClick={() => handleButtonClick("Basic", 49)}>
-                    Contact for free trial
+                    Buy Now 
                   </button>
                 </div>
               </div>
@@ -175,7 +175,7 @@ export default function PricingPage() {
               <div className="chart-cont2">
                 <div className="chart-btn">
                   <button onClick={() => handleButtonClick("Business", 199)}>
-                    Contact for free trial
+                    Buy Now 
                   </button>
                 </div>
               </div>
@@ -240,7 +240,7 @@ export default function PricingPage() {
               <div className="chart-cont2">
                 <div className="chart-btn">
                   <button onClick={() => handleButtonClick("Premium", 299)}>
-                    Contact for free trial
+                    Buy Now 
                   </button>
                 </div>
               </div>
@@ -273,67 +273,6 @@ export default function PricingPage() {
                       <div className="tick-cont"></div>
                       <div className="list-content">
                         <p>✔ Advanced A/B testing</p>
-                      </div>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-            <div className="pricing-chart char-1">
-              <div className="chart-cont1">
-                <div className="chart-cont1_1">
-                  <div className="chart-title">
-                    <h1>Growth</h1>
-                  </div>
-                  <div className="chart-desc">
-                    <p>Best for online brands with over 150k visitors/mo</p>
-                  </div>
-                </div>
-
-                <div className="chart-cont1_2">
-                  <div className="chart-pricing-cont">
-                    <h1>Custom pricing</h1>
-                  </div>
-                  <div className="chart-pricing-cont">
-                    <p>Unlimited views/month</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="chart-cont2">
-                <div className="chart-btn">
-                  <button>Contact for free trial</button>
-                </div>
-              </div>
-
-              <div className="chart-cont3">
-                <div className="chart-cont3_1">
-                  <h4>Everything in Premium, plus:</h4>
-                </div>
-                <div className="chart-cont3_2">
-                  <ul>
-                    <li>
-                      <div className="tick-cont"></div>
-                      <div className="list-content">
-                        <p>✔ AI products auto tagging</p>
-                      </div>
-                    </li>
-                    <li>
-                      <div className="tick-cont"></div>
-                      <div className="list-content">
-                        <p>✔ Early access to new features</p>
-                      </div>
-                    </li>
-                    <li>
-                      <div className="tick-cont"></div>
-                      <div className="list-content">
-                        <p>✔ White-Glove onboarding</p>
-                      </div>
-                    </li>
-                    <li>
-                      <div className="tick-cont"></div>
-                      <div className="list-content">
-                        <p>✔ Customizable CTA Buttons</p>
                       </div>
                     </li>
                   </ul>
