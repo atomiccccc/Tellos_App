@@ -198,6 +198,7 @@ app.post("/api/recurring_application_charge", async (req, res) => {
   recurring_application_charge.name = name;
   recurring_application_charge.price = parseFloat(price);
   recurring_application_charge.return_url = `https://${req.hostname}/api/payment-completion?store_url=${host}`;
+  recurring_application_charge.trial_days=30
   recurring_application_charge.test = true;
   try {
     await recurring_application_charge.save({ update: true });
@@ -243,7 +244,7 @@ app.get("/api/payment-completion", async (req, res) => {
   }
 
   // Redirect the user back to your Tellos admin URL
-  return res.redirect(process.env.TELLOS_ADMIN_URL); 
+  return res.redirect(process.env.TELLOS_ADMIN_URL+`?chargeId=${chargeId}`); 
 });
 
 // Define route to check if charge ID is present in the database
