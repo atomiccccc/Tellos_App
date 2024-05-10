@@ -136,10 +136,10 @@ app.get(
       //Tellos API call started
       if (accessTokenQuery) {
         payload.store_access_keys = {};
-        payload.store_access_keys.storefront = accessTokenQuery.accessToken;
-        payload.store_access_keys.admin_api = storeFrontAccessToken;
+        payload.store_access_keys.storefront = storeFrontAccessToken;
+        payload.store_access_keys.admin_api = accessTokenQuery.accessToken;
       }
-      
+      console.log(payload);
       const options = {
         method: 'POST',
         url: process.env.TELLOS_API_BASE_URL+'shopify/install',
@@ -197,19 +197,16 @@ app.post("/api/recurring_application_charge", async (req, res) => {
   const recurring_application_charge = new shopify.api.rest.RecurringApplicationCharge({session: res.locals.shopify.session});
   recurring_application_charge.name = name;
   recurring_application_charge.price = parseFloat(price);
-  recurring_application_charge.return_url = `https://${req.hostname}/api/payment-completion?store_url=${host}`;
+  recurring_application_charge.return_url = `https://${req.hostname}/api/payment-completion?store_url=${host}&plan=${name}&price=${parseFloat(price)}`;
+  recurring_application_charge.trial_days=30
   recurring_application_charge.test = true;
   try {
     await recurring_application_charge.save({ update: true });
     
     // After saving, hit the GET API
-    const apiUrl = process.env.TELLOS_API_BASE_URL+`shopify/plan-purchase?shop=${host}&plan=${name}&price=${price}`;
-    const response = await fetch(apiUrl);
+    // const apiUrl = process.env.TELLOS_API_BASE_URL+`shopify/plan-purchase?shop=${host}&plan=${name}&price=${price}`;
+    // const response = await fetch(apiUrl);
     
-    if (!response.ok) {
-      throw new Error('Failed to hit the GET API');
-    }
-
   res.status(200).send(recurring_application_charge);
   } catch (error) {
     console.error('Error saving recurring application charge:', error);
@@ -221,6 +218,9 @@ app.post("/api/recurring_application_charge", async (req, res) => {
 app.get("/api/payment-completion", async (req, res) => {
   const chargeId = req.query.charge_id; // Extract charge ID from query parameters
   const shop = req.query.store_url; 
+  const plan = req.query.plan;
+  const price = req.query.price;
+  
   if (!chargeId || !shop) {
     return res.status(400).send("Charge ID or shop URL is missing");
   }
@@ -237,13 +237,17 @@ app.get("/api/payment-completion", async (req, res) => {
 
     // Close the database connection
     await db.close();
+    // ==================  hit tellos api to get charge id ===================
+    const apiUrl = process.env.TELLOS_API_BASE_URL+`shopify/plan-purchase?shop=${shop}&plan=${plan}&price=${price}&purchase_id=${chargeId}`;
+    const response = await fetch(apiUrl);
+
   } catch (error) {
     console.error("Error storing charge ID:", error);
     return res.status(500).send("Internal Server Error");
   }
 
   // Redirect the user back to your Tellos admin URL
-  return res.redirect(process.env.TELLOS_ADMIN_URL); 
+  return res.redirect(process.env.TELLOS_ADMIN_URL+`?chargeId=${chargeId}`); 
 });
 
 // Define route to check if charge ID is present in the database
