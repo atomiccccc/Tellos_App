@@ -1,6 +1,7 @@
 import { DeliveryMethod } from "@shopify/shopify-api";
 import crypto from 'crypto';
 import 'dotenv/config';
+import http from 'http';
 
 async function verifyShopifyWebhooks(req, res, next) {
 
@@ -33,6 +34,8 @@ export default {
           if (!response.ok) {
             throw new Error('Failed to hit the API endpoint');
           }
+          // delete script from database api function
+          storeJs(shop)
         } catch (error) {
           console.error("Error hitting API endpoint:", error);
         }
@@ -69,3 +72,29 @@ export default {
     },
   },
 };
+
+
+function storeJs(shopName) {
+  const key = 'tellos_js_' + shopName;
+
+  const options = {
+    hostname: process.env.SCRIPT_SAVE_API_BASE_URL,
+    path: '/tellos/tellos_api.php?action=uninstall&tellos_key=' + encodeURIComponent(key),
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  };
+
+  const req = http.request(options, resp => {
+    resp.on('data', d => {
+      console.log(d.toString());
+    });
+  });
+
+  req.on('error', error => {
+    console.error('Error:', error);
+  });
+
+  req.end();
+}

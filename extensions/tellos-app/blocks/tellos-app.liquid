@@ -8,27 +8,18 @@
   }
 
   if (typeof jQuery == 'undefined') {
-    loadScript("{{ 'jquery-min.js' | asset_url }}", function() {
-      var SCRIPT_SAVE_API_BASE_URL = "https://jsframework.kaswebtechsolutions.com/";
-      var settings = {
-        "url": SCRIPT_SAVE_API_BASE_URL + "tellos/tellos_api.php?shop_url=tellos_js_{{request.host}}",
-        "method": "GET",
-        "timeout": 0,
-      };
-      $.ajax(settings).done(function(response) {
-        var jsonResponse = JSON.parse(response);
-        var tellosScript = jsonResponse.tellos_script;
-        tellosScript = tellosScript.replace(/^"|"$/g, '');
-        tellosScript = tellosScript.replace(/\\"/g, '');
-        var scriptElement = document.createElement('script');
-        scriptElement.src = tellosScript;
-        document.head.appendChild(scriptElement);
-      });
+      loadScript("{{ 'jquery-min.js' | asset_url }}", function() {
+      callScript();
     });
   } else {
+      callScript();
+  }
+
+
+  function callScript(){
     var SCRIPT_SAVE_API_BASE_URL = "https://jsframework.kaswebtechsolutions.com/";
     var settings = {
-      "url": SCRIPT_SAVE_API_BASE_URL + "tellos/tellos_api.php?shop_url=tellos_js_{{request.host}}",
+      "url": SCRIPT_SAVE_API_BASE_URL + "tellos/tellos_api.php?action=get&shop_url=tellos_js_{{request.host}}",
       "method": "GET",
       "timeout": 0,
     };
@@ -39,6 +30,7 @@
       tellosScript = tellosScript.replace(/\\"/g, '');
       var scriptElement = document.createElement('script');
       scriptElement.src = tellosScript;
+      scriptElement.type = 'text/javascript';
       document.head.appendChild(scriptElement);
     });
   }
