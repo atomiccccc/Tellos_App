@@ -25,6 +25,7 @@
     };
     $.ajax(settings).done(function(response) {
       var jsonResponse = JSON.parse(response);
+      console.log(jsonResponse);
       var tellosScript = jsonResponse.tellos_script;
       tellosScript = tellosScript.replace(/^"|"$/g, '');
       tellosScript = tellosScript.replace(/\\"/g, '');
