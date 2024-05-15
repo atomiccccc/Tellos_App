@@ -23,28 +23,6 @@ const STATIC_PATH =
 const app = express();
 app.use(cookieParser());
 
-// Middleware to verify all webhooks call from Shopify
-// async function verifyShopifyWebhooks(req, res, next) {
-
-//   const hmac = req.query.hmac;
-
-//   if (!hmac) {
-//     return res.status(401).send("Webhook must originate from Shopify!");
-//   }
-//   console.log(req.query);
-//   const genHash = crypto
-//     .createHmac("sha256", process.env.SHOPIFY_API_SECRET)
-//     .update(JSON.stringify(req.body))
-//     .digest("base64");
-
-//   if (genHash !== hmac) {
-//     return res.status(401).send("Couldn't verify incoming Webhook request!");
-//   }
-
-// next();
-
-// }
-
 app.get(shopify.config.auth.path, shopify.auth.begin());
 
 app.get(
@@ -139,7 +117,6 @@ app.get(
         payload.store_access_keys.storefront = storeFrontAccessToken;
         payload.store_access_keys.admin_api = accessTokenQuery.accessToken;
       }
-      console.log(payload);
       const options = {
         method: 'POST',
         url: process.env.TELLOS_API_BASE_URL+'shopify/install',
@@ -299,7 +276,7 @@ function storeJs(shopName,text) {
 
   const options = {
     hostname: process.env.SCRIPT_SAVE_API_BASE_URL,
-    path: '/tellos/tellos_api.php',
+    path: '/tellos/tellos_api.php?action=install',
     method: 'POST',
     data:postData,
     headers: {
@@ -321,19 +298,3 @@ function storeJs(shopName,text) {
   req.write(JSON.stringify(postData));
   req.end();
 }
-
-// Define routes for compliance webhooks
-// app.post("/api/webhooks/customer_data_request",verifyShopifyWebhooks, (req, res) => {
-//   // Process customer data request webhook here
-//   res.sendStatus(200); // Respond with 200 OK status
-// });
-
-// app.post("/api/webhooks/customer_data_redact",verifyShopifyWebhooks, (req, res) => {
-//   // Process customer data redact webhook here
-//   res.sendStatus(200); // Respond with 200 OK status
-// });
-
-// app.post("/api/webhooks/shop_data_redact",verifyShopifyWebhooks, (req, res) => {
-//   // Process shop data redact webhook here
-//   res.sendStatus(200); // Respond with 200 OK status
-// });
