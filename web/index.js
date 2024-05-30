@@ -12,6 +12,7 @@ import cookieParser from 'cookie-parser';
 import http from 'http';
 import 'dotenv/config';
 import crypto from 'crypto';
+import Shopify from "shopify-api-node";
 
 const PORT = parseInt(process.env.BACKEND_PORT || process.env.PORT, 10);
 
@@ -77,11 +78,15 @@ app.get(
 
       // Check if the column 'chargeID' exists in the 'shopify_sessions' table
       const columns = await db.all("PRAGMA table_info(shopify_sessions)");
-      var columnExists = columns.some(column => column.name === 'chargeID');
+      var columnExistschargeID = columns.some(column => column.name === 'chargeID');
+      var columnExistsMetafieldID = columns.some(column => column.name === 'metafieldID');
 
-      // Create New Column if Not Exists !
-      if (!columnExists) {
+      // Create New Columns if Not Exists !
+      if (!columnExistschargeID) {
         await db.run("ALTER TABLE shopify_sessions ADD COLUMN chargeID INTEGER");
+      }
+      if (!columnExistsMetafieldID) {
+        await db.run("ALTER TABLE shopify_sessions ADD COLUMN metafieldID INTEGER");
       }
       // Create storefrontdetails table if it doesn't exist
       await db.run(`CREATE TABLE IF NOT EXISTS storefrontdetails (
@@ -105,8 +110,6 @@ app.get(
         // Insert data into storefrontdetails table
         await db.run("INSERT INTO storefrontdetails (storefrontAccessTokenId,storeFrontAccessToken, shop) VALUES (?, ?, ?)", [storefrontAccessTokenId,storeFrontAccessToken, shopName]);
       }
-
-      await db.close();
 
       //===============================End Database Columns Creations===================
       
@@ -137,8 +140,32 @@ app.get(
         }
         return response.text(); // Convert response to text
       })
-      .then(text => {
-        storeJs(shopName, JSON.stringify(text))
+      .then(async  text => {
+        // store the api return url in shop metafield 
+        const metafield = new shopify.api.rest.Metafield({session: res.locals.shopify.session});
+        metafield.owner_id = response_sanitized.id;
+        metafield.namespace = "script";
+        metafield.key = "tellos";
+        metafield.type = "single_line_text_field";
+        metafield.value = text;
+        metafield.save({
+          update: true,
+        });
+        // Fetch metafields to find the newly created one
+        const metafieldsResponse = await shopify.api.rest.Metafield.all({
+          session: res.locals.shopify.session
+        });
+
+        const targetMetafield = metafieldsResponse.find(metafield => metafield.namespace === 'script' && metafield.key === 'tellos');
+
+        if (targetMetafield) {
+          console.log('Metafield ID:', targetMetafield.id);
+          // Insert the charge ID into your database table where the shop column matches the provided shop URL
+          await db.run("UPDATE shopify_sessions SET metafieldID = ? WHERE shop = ?", [targetMetafield.id, shopName]);
+          await db.close();
+        } else {
+          console.log('Metafield with namespace "script" and key "tellos" does not exist.');
+        }
         next(); 
       })
     } catch (error) {
@@ -264,37 +291,3 @@ app.use("/*", shopify.ensureInstalledOnShop(), async (_req, res, _next) => {
 
 // Save store's tellos script url into a text format
 app.listen(PORT);
-
-function storeJs(shopName,text) {
-  const key = 'tellos_js_' + shopName; // Generate a unique key using timestamp
-  const value = JSON.stringify(text); // Convert text to JSON string
-
-  const postData = {
-    tellos_key: key,
-    tellos_value: value
-  };
-
-  const options = {
-    hostname: process.env.SCRIPT_SAVE_API_BASE_URL,
-    path: '/tellos/tellos_api.php?action=install',
-    method: 'POST',
-    data:postData,
-    headers: {
-      'Content-Type': 'application/json',
-      'Content-Length': JSON.stringify(postData).length
-    }
-  };
-
-  const req = http.request(options, resp => {
-    resp.on('data', d => {
-      console.log(d.toString());
-    });
-  });
-
-  req.on('error', error => {
-    console.error('Error:', error);
-  });
-
-  req.write(JSON.stringify(postData));
-  req.end();
-}

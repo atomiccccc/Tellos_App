@@ -1,7 +1,8 @@
 import { DeliveryMethod } from "@shopify/shopify-api";
 import crypto from 'crypto';
 import 'dotenv/config';
-import http from 'http';
+import sqlite3 from "sqlite3";
+import { open } from "sqlite";
 
 async function verifyShopifyWebhooks(req, res, next) {
 
@@ -31,11 +32,38 @@ export default {
       // Make HTTP request to the specified API endpoint
       try {
           const response = await fetch(process.env.TELLOS_API_BASE_URL+`shopify/uninstall?shop=${shop}`);
-          if (!response.ok) {
-            throw new Error('Failed to hit the API endpoint');
-          }
+          console.log(response);
+
+          // Query the database to check if a charge ID exists for the provided host
+          const db = await open({
+            filename: "./database.sqlite",
+            driver: sqlite3.Database,
+          });
+
+          const accessToken = await db.get("SELECT accessToken FROM shopify_sessions WHERE shop = ?", [shop]);
+          const metafieldID = await db.get("SELECT metafieldID FROM shopify_sessions WHERE shop = ?", [shop]);
+          await db.close();
+
+          // if (!response.ok) {
+          //   throw new Error('Failed to hit the API endpoint');
+          // }
+
+          const myHeaders = new Headers();
+          myHeaders.append("X-Shopify-Access-Token", accessToken);
+
+          const requestOptions = {
+            method: "DELETE",
+            headers: myHeaders,
+            redirect: "follow"
+          };
+
+          fetch("https://"+shop+"/admin/api/2024-04/metafields/"+metafieldID+".json", requestOptions)
+            .then((response) => response.text())
+            .then((result) => console.log(result))
+            .catch((error) => console.error(error));
+
           // delete script from database api function
-          storeJs(shop)
+          // storeJs(shop)
         } catch (error) {
           console.error("Error hitting API endpoint:", error);
         }
@@ -72,29 +100,3 @@ export default {
     },
   },
 };
-
-
-function storeJs(shopName) {
-  const key = 'tellos_js_' + shopName;
-
-  const options = {
-    hostname: process.env.SCRIPT_SAVE_API_BASE_URL,
-    path: '/tellos/tellos_api.php?action=uninstall&tellos_key=' + encodeURIComponent(key),
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json'
-    }
-  };
-
-  const req = http.request(options, resp => {
-    resp.on('data', d => {
-      console.log(d.toString());
-    });
-  });
-
-  req.on('error', error => {
-    console.error('Error:', error);
-  });
-
-  req.end();
-}
