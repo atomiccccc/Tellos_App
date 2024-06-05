@@ -9,10 +9,7 @@ import GDPRWebhookHandlers from "./gdpr.js";
 import sqlite3 from "sqlite3";
 import { open } from "sqlite";
 import cookieParser from 'cookie-parser';
-import http from 'http';
 import 'dotenv/config';
-import crypto from 'crypto';
-import Shopify from "shopify-api-node";
 
 const PORT = parseInt(process.env.BACKEND_PORT || process.env.PORT, 10);
 
